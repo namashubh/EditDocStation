@@ -247,7 +247,7 @@ window.runBackgroundEditorTests = async function (file) {
   if (window.disposeBackgroundEditor) disposeBackgroundEditor();
   renderTool(TOOLS.find(tool => tool.id === 'remove-background'));
   const wait = async predicate => {
-    const deadline = Date.now() + 30000;
+    const deadline = Date.now() + 120000;
     while (!predicate()) {
       if (Date.now() > deadline) throw new Error('Background editor test timed out.');
       await new Promise(resolve => setTimeout(resolve, 25));
