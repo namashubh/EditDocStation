@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edit Doc Station - PDF &amp; Image Tools</title>
+  <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#" class="logo">
+      <img src="{{ url_for('static', filename='logo.svg') }}" alt="" width="34" height="34">
+      <span>Edit Doc <b>Station</b></span>
+    </a>
+    <nav class="topnav">
+      <a href="#merge">Merge PDF</a>
+      <a href="#split">Split PDF</a>
+      <a href="#compress">Compress PDF</a>
+      <a href="#pdf-to-word">PDF to Word</a>
+      <a href="#compress-image">Compress Image</a>
+      <a href="#resize-image">Resize Image</a>
+    </nav>
+  </header>
+  <main id="app" class="container"></main>
+  <footer class="footer">Edit Doc Station &middot; Files are processed locally on this computer and deleted right after processing.</footer>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
