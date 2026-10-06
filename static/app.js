@@ -198,12 +198,14 @@ if (window.BrowserTools) {
     if (tool.id === 'sign') tool.desc = 'Add a visual signature to a PDF. This is not a certificate-based digital signature.';
     if (tool.id === 'convert-image') tool.desc = 'Convert JPG, PNG, WEBP, BMP or GIF to JPG, PNG or WEBP. Animated images become a single frame.';
     if (tool.id === 'compress-image') tool.desc = 'Compress JPG and WEBP by quality or maximum KB. PNG output remains lossless.';
+    if (tool.id === 'remove-background') { tool.multiple = false; tool.color = '#0e9f8e'; tool.desc = 'AI background removal with erase/restore brushes, photo or color backgrounds, and image adjustments.'; }
   }
 }
 
 let homeQuery = '';
 
 function route() {
+  if (window.disposeBackgroundEditor) disposeBackgroundEditor();
   const tool = TOOLS.find(t => t.id === location.hash.slice(1));
   tool ? renderTool(tool) : renderHome();
   window.scrollTo(0, 0);
@@ -512,12 +514,14 @@ async function entryBlob(entry) {
 
 /* ------------------------------------------------------------------ generic tool page */
 function renderTool(t) {
+  if (window.disposeBackgroundEditor) disposeBackgroundEditor();
   const app = $('#app');
   const body = el('div');
   app.replaceChildren(
     el('a', { class: 'back', href: '#' }, '\u2190 All tools'),
     el('div', { class: 'tool-head' }, toolIcon(t, true), el('div', {}, el('h1', {}, t.name), el('p', {}, t.desc))),
     body);
+  if (window.BrowserTools && t.id === 'remove-background') return renderBackgroundEditor(t, body);
   if (t.editor) return renderEditorStart(t, body);
 
   const files = [];

@@ -19,6 +19,7 @@ dist/
 *.msi
 *.lnk
 *.onnx
+!static/vendor/background/u2netp.onnx
 .rembg/
 uploads/
 temp/
@@ -26,3 +27,4 @@ tmp/
 .vscode/
 Thumbs.db
 Desktop.ini
+tests/local-fixtures/

@@ -15,10 +15,11 @@ Available browser tools:
 - Images to PDF.
 - Visible PDF text replacement, annotations, signatures, watermarks, and page numbers.
 - Image compression, resizing, and JPG/PNG/WEBP conversion.
+- AI background removal with manual erase/restore brushes, undo/redo, color and photo backgrounds, before/after comparison, blur, shadows, and brightness/contrast/saturation controls.
 
 Browser limitations:
 
-- Office/HTML conversions, PDF-to-Office conversions, AI background removal, and password protection/unlocking remain desktop-only.
+- Office/HTML conversions, PDF-to-Office conversions, and password protection/unlocking remain desktop-only.
 - Edit PDF highlights selectable text. Clicking a text box allows its visible text to be changed or cleared. Text replacements use substitute fonts on a white background and flatten only the edited pages into images; searchable text, links, forms, and other interactive content on those pages are lost. Unedited pages remain PDFs with their original content. Replaced pages cannot be edited as text again without OCR; retain your original PDF for further edits. Scanned/image-only pages have no selectable text. This is not secure redaction and works best on plain white page backgrounds.
 - PDF compression rasterizes pages when it reduces file size. Searchable text, links, forms, and digital signatures are not preserved in the compressed copy. If the result would be larger, the original PDF is returned.
 - Whiteout is only a visual cover, not secure redaction. Added signatures are visual, not certificate-based digital signatures. Changing an already digitally signed PDF invalidates its existing signature.
@@ -37,9 +38,19 @@ To preview the web version locally, run `python -m http.server 5173` from this r
 
 ## Browser Tests
 
-Serve the repository over HTTP. Load `tests/browser-tests.js` on the app page with a script element, then call `await runBrowserTests()` in the browser console. It checks all 14 tools, PDF structure, rotated annotation pixels, image dimensions, ZIP filename collisions, and invalid input.
+Serve the repository over HTTP. Load `tests/browser-tests.js` on the app page with a script element, then call `await runBrowserTests()` in the browser console. It checks PDF/image processing, PDF structure, rotated annotation pixels, image dimensions, ZIP filename collisions, and invalid input. The catalog has 15 tools. Use `runEditorKeyboardTests()` for PDF editing keys and `runBackgroundEditorTests(blob)` for the background editor; these UI tests replace the current editor with synthetic or supplied test input, so run them in a separate test tab.
 
 Dependency versions and licenses are listed in `THIRD_PARTY.md`.
+
+## Background Removal
+
+The Remove Background tool runs U2NetP through ONNX Runtime Web on the visitor's device. The runtime and model are bundled in this repository; no paid API, account, or photo upload service is involved. The initial model/runtime download can take time. The browser caches those files where supported.
+
+Upload, drop or paste an image, or load a direct image URL when the host permits browser access (CORS). Select a transparent, solid-color, uploaded-photo or bundled-photo background. Use Cutout brushes to correct unwanted areas and restore missing details. Effects and Adjust change the preview and exported image. PNG and WebP preserve transparency; JPG fills transparent regions with white. The downloaded image retains the original pixel dimensions.
+
+Photos and replacement backgrounds are limited to 30 MB and 12 megapixels. Some effect filters require a browser with Canvas filter support. The optional Remove color halo setting estimates a uniform original background from transparent corners to reduce fringe colors; disable it if it changes the appearance of complex edges. Results depend on lighting, contrast and subject detail: thin hair, glass, complex backgrounds and fine edges may need manual corrections. The lightweight browser model does not guarantee professional-service accuracy or perfect results. AI background generation and third-party stock-photo search are not included.
+
+`runBackgroundEditorTests(blob)` tests a centered-subject photo locally through the editor, including brushes/history, backgrounds, adjustments and exports. Private sample photos under `tests/local-fixtures/` are ignored by Git and are not published.
 
 ## Desktop Version
 

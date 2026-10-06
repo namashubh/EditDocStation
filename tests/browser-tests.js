@@ -222,3 +222,143 @@ window.runEditorKeyboardTests = async function () {
   }
   return { passed: true, keys: ['Backspace', 'Delete'], saved: document.querySelector('.result p').textContent };
 };
+
+window.runBackgroundEditorTests = async function (file) {
+  const checks = [];
+  const source = BackgroundEngine.surface(10, 10);
+  const mask = BackgroundEngine.surface(10, 10);
+  const sourceContext = source.getContext('2d');
+  sourceContext.fillStyle = '#ffffff';
+  sourceContext.fillRect(0, 0, 10, 10);
+  sourceContext.fillStyle = '#808080';
+  sourceContext.fillRect(5, 5, 1, 1);
+  sourceContext.fillStyle = '#123456';
+  sourceContext.fillRect(6, 5, 1, 1);
+  const maskContext = mask.getContext('2d');
+  maskContext.fillStyle = 'rgba(255,255,255,0.5)';
+  maskContext.fillRect(5, 5, 1, 1);
+  maskContext.fillStyle = '#ffffff';
+  maskContext.fillRect(6, 5, 1, 1);
+  const cleaned = BackgroundEngine.compose(source, mask, { cleanup: true }).getContext('2d');
+  const edge = cleaned.getImageData(5, 5, 1, 1).data;
+  const opaque = cleaned.getImageData(6, 5, 1, 1).data;
+  if (edge[0] > 5 || edge[3] < 125 || opaque[0] !== 18 || opaque[1] !== 52 || opaque[2] !== 86) throw new Error('Edge cleanup damaged opaque subject pixels.');
+  checks.push('edge cleanup and opaque foreground preservation');
+  if (window.disposeBackgroundEditor) disposeBackgroundEditor();
+  renderTool(TOOLS.find(tool => tool.id === 'remove-background'));
+  const wait = async predicate => {
+    const deadline = Date.now() + 30000;
+    while (!predicate()) {
+      if (Date.now() > deadline) throw new Error('Background editor test timed out.');
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  };
+  const transfer = new DataTransfer();
+  transfer.items.add(new File([file], 'background-test.jpg', { type: file.type || 'image/jpeg' }));
+  const input = document.querySelector('#app input[type=file]');
+  input.files = transfer.files;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  await wait(() => document.querySelector('.bg-editor') && !document.querySelector('.bg-editor').hidden);
+  const preview = document.querySelector('.bg-canvas');
+  const context = preview.getContext('2d', { willReadFrequently: true });
+  const pixel = (x = 0, y = 0) => [...context.getImageData(x, y, 1, 1).data];
+  const click = label => {
+    const button = document.querySelector(`button[aria-label="${label}"]`);
+    if (!button || button.disabled) throw new Error(`Unavailable control: ${label}`);
+    button.click();
+  };
+  const transparent = pixel()[3];
+  click('Compare with original');
+  if (pixel()[3] !== 255) throw new Error('Original comparison is not opaque.');
+  click('Compare with original');
+  if (pixel()[3] !== transparent) throw new Error('Comparison changed the mask.');
+  click('Background #2196f3');
+  if (pixel()[2] < 200 || pixel()[3] !== 255) throw new Error('Solid background failed.');
+  click('Transparent background');
+  checks.push('AI cutout, before/after comparison and color backgrounds');
+
+  click('Cutout');
+  let x = Math.floor(preview.width / 2);
+  let y = Math.floor(preview.height / 2);
+  if (pixel(x, y)[3] < 100) {
+    const data = context.getImageData(0, 0, preview.width, preview.height).data;
+    const index = data.findIndex((value, offset) => offset % 4 === 3 && value > 200);
+    if (index >= 0) { x = Math.floor(index / 4) % preview.width; y = Math.floor(Math.floor(index / 4) / preview.width); }
+  }
+  const before = pixel(x, y)[3];
+  if (before < 100) throw new Error('Use a test image with a centered foreground subject.');
+  const paint = mode => {
+    click(mode);
+    const rect = preview.getBoundingClientRect();
+    const capture = preview.setPointerCapture;
+    preview.setPointerCapture = () => {};
+    try {
+      const options = { bubbles: true, pointerId: 1, clientX: rect.left + x / preview.width * rect.width, clientY: rect.top + y / preview.height * rect.height };
+      preview.dispatchEvent(new PointerEvent('pointerdown', options));
+      preview.dispatchEvent(new PointerEvent('pointerup', options));
+    } finally { preview.setPointerCapture = capture; }
+  };
+  paint('Erase');
+  if (pixel(x, y)[3] > 10) throw new Error('Erase brush did not clear alpha.');
+  click('Undo mask edit');
+  if (Math.abs(pixel(x, y)[3] - before) > 2) throw new Error('Undo did not restore the mask.');
+  click('Redo mask edit');
+  if (pixel(x, y)[3] > 10) throw new Error('Redo did not restore erasure.');
+  paint('Restore');
+  if (pixel(x, y)[3] < 245) throw new Error('Restore brush did not restore subject pixels.');
+  checks.push('erase, restore, undo and redo');
+
+  click('Background');
+  [...document.querySelectorAll('#bg-background button')].find(button => button.textContent === 'Photo').click();
+  const template = document.querySelector('.bg-photo img');
+  await wait(() => template.complete && template.naturalWidth > 0);
+  click('Forest background');
+  await wait(() => !document.querySelector('#app .status').textContent);
+  if (pixel()[3] !== 255) throw new Error('Photo background failed.');
+  checks.push('bundled photo background');
+
+  click('Effects');
+  const blur = document.querySelector('#bg-effects input[type=checkbox]');
+  blur.checked = true;
+  blur.dispatchEvent(new Event('change'));
+  if (!blur.checked || document.querySelector('[aria-label="Background blur"]').disabled) throw new Error('Blur original controls lost state.');
+  blur.checked = false;
+  blur.dispatchEvent(new Event('change'));
+  click('Adjust');
+  const brightness = document.querySelector('[aria-label="Brightness"]');
+  const luminance = () => {
+    const values = context.getImageData(0, 0, preview.width, preview.height).data;
+    let sum = 0;
+    for (let offset = 0; offset < values.length; offset += 4) sum += values[offset] + values[offset + 1] + values[offset + 2];
+    return sum;
+  };
+  const originalColor = luminance();
+  brightness.value = '50';
+  brightness.dispatchEvent(new Event('input'));
+  if (luminance() >= originalColor) throw new Error('Brightness adjustment did not change output.');
+  [...document.querySelectorAll('#bg-adjust button')].find(button => button.textContent === 'Reset adjustments').click();
+  checks.push('background blur and image adjustments');
+
+  const originalClick = HTMLAnchorElement.prototype.click;
+  let captured;
+  HTMLAnchorElement.prototype.click = function () {
+    if (this.download) captured = { url: this.href, name: this.download };
+    else originalClick.call(this);
+  };
+  try {
+    for (const format of ['png', 'webp', 'jpeg']) {
+      captured = null;
+      document.querySelector('[aria-label="Download format"]').value = format;
+      click('Download image');
+      await wait(() => captured);
+      const blob = await (await fetch(captured.url)).blob();
+      if (blob.type !== `image/${format}`) throw new Error('Download has the wrong MIME type.');
+      const bitmap = await createImageBitmap(blob);
+      if (!bitmap.width || !bitmap.height) throw new Error('Exported image is blank.');
+      bitmap.close();
+      await wait(() => !document.querySelector('[aria-label="Download image"]').disabled);
+    }
+  } finally { HTMLAnchorElement.prototype.click = originalClick; }
+  checks.push('PNG, WEBP and JPG exports');
+  return { passed: true, checks, dimensions: [preview.width, preview.height] };
+};

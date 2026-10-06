@@ -4,7 +4,7 @@ window.BrowserTools = (() => {
   const supported = new Set([
     'merge', 'split', 'remove-pages', 'rotate', 'compress', 'pdf-to-jpg',
     'jpg-to-pdf', 'edit', 'sign', 'watermark', 'page-numbers',
-    'compress-image', 'resize-image', 'convert-image',
+    'compress-image', 'resize-image', 'convert-image', 'remove-background',
   ]);
   const maxBytes = 100 * 1024 * 1024;
   const maxPixels = 16000000;
@@ -445,6 +445,15 @@ window.BrowserTools = (() => {
 
   async function process(tool, form, files) {
     const outputs = [];
+    if (tool === 'remove-background') {
+      for (const file of files) {
+        const { original, mask } = await BackgroundEngine.remove(file);
+        const background = form.get('background') === 'color' ? { color: form.get('color') || '#ffffff' } : {};
+        const output = BackgroundEngine.compose(original, mask, background);
+        outputs.push({ blob: await encode(output, 'png'), name: `${stem(file.name)}_cutout.png` });
+      }
+      return outputs;
+    }
     if (tool === 'jpg-to-pdf') return [{ blob: await imagesPdf(files, form), name: 'images.pdf' }];
     if (tool === 'merge') {
       if (files.length < 2) throw new Error('Select at least two PDFs to merge.');
