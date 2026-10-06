@@ -964,7 +964,9 @@ function openEditor(t, file, body) {
   new ResizeObserver(() => render()).observe(overlay);
   document.addEventListener('keydown', function onKey(e) {
     if (!document.body.contains(overlay)) return document.removeEventListener('keydown', onKey);
-    if ((e.key === 'Delete' || e.key === 'Backspace') && S.sel && S.sel.type !== 'text' && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) {
+    if (e.target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    if ((e.key === 'Delete' || e.key === 'Backspace') && S.sel && S.sel.type !== 'text') {
+      e.preventDefault();
       removeItem(S.sel);
     }
   });

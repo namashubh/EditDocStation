@@ -180,3 +180,45 @@ window.runBrowserTests = async function () {
   checks.push('archive filename collisions, invalid input and desktop-only tools');
   return { passed: true, checks, supportedTools: BrowserTools.supported.size };
 };
+
+window.runEditorKeyboardTests = async function () {
+  const pdf = await PDFLib.PDFDocument.create();
+  pdf.addPage([300, 400]).drawText('Keyboard test', { x: 30, y: 300, size: 20 });
+  renderTool(TOOLS.find(tool => tool.id === 'edit'));
+  const input = document.querySelector('#app input[type=file]');
+  const transfer = new DataTransfer();
+  transfer.items.add(new File([await pdf.save()], 'keyboard-test.pdf', { type: 'application/pdf' }));
+  input.files = transfer.files;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  const waitFor = async selector => {
+    const deadline = Date.now() + 10000;
+    while (!document.querySelector(selector)) {
+      if (Date.now() > deadline) throw new Error(`Editor test timed out: ${selector}`);
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    return document.querySelector(selector);
+  };
+  const line = await waitFor('.ed-line');
+  const rect = line.getBoundingClientRect();
+  line.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: rect.left + 2, clientY: rect.top + 2 }));
+  const textbox = await waitFor('.ed-replace .ed-textbox');
+  textbox.focus();
+  for (const key of ['Backspace', 'Delete']) {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    textbox.dispatchEvent(event);
+    if (!textbox.isConnected || event.defaultPrevented) throw new Error(`${key} removed the text box or blocked text editing.`);
+  }
+  textbox.textContent = 'Changed with keyboard';
+  textbox.dispatchEvent(new Event('input', { bubbles: true }));
+  const previewSetting = localStorage.getItem(PREVIEW_KEY);
+  localStorage.setItem(PREVIEW_KEY, '1');
+  try {
+    [...document.querySelectorAll('.ed-side button')].find(button => button.textContent === 'Save PDF').click();
+    await waitFor('.result');
+    await waitFor('.pv-pages img');
+  } finally {
+    if (previewSetting === null) localStorage.removeItem(PREVIEW_KEY);
+    else localStorage.setItem(PREVIEW_KEY, previewSetting);
+  }
+  return { passed: true, keys: ['Backspace', 'Delete'], saved: document.querySelector('.result p').textContent };
+};
