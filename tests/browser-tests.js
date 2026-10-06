@@ -1,0 +1,137 @@
+'use strict';
+
+window.runBrowserTests = async function () {
+  const checks = [];
+  window.browserTestProgress = checks;
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const pdf = await PDFLib.PDFDocument.create();
+  for (let index = 0; index < 3; index++) {
+    const page = pdf.addPage([240 + index * 20, 320]);
+    page.drawText(`Page ${index + 1}`, { x: 30, y: 260, size: 20 });
+  }
+  const file = new File([await pdf.save()], 'sample.pdf', { type: 'application/pdf' });
+  const surface = document.createElement('canvas');
+  surface.width = 200;
+  surface.height = 100;
+  const context = surface.getContext('2d');
+  context.fillStyle = '#ee2233';
+  context.fillRect(0, 0, 100, 100);
+  context.fillStyle = '#229955';
+  context.fillRect(100, 0, 100, 100);
+  const image = new File([await new Promise(resolve => surface.toBlob(resolve, 'image/png'))], 'photo.png', { type: 'image/png' });
+
+  async function run(tool, options = {}, files = [file], expectError = false) {
+    const form = new FormData();
+    files.forEach(entry => form.append('files', entry));
+    for (const [key, value] of Object.entries(options)) form.append(key, value);
+    const response = await BrowserTools.post(`/api/tool/${tool}`, form);
+    if (expectError) {
+      assert(!response.ok && (await response.json()).error, `${tool}: expected actionable error`);
+      return;
+    }
+    assert(response.ok, `${tool}: ${response.ok ? '' : await response.text()}`);
+    return response.blob();
+  }
+
+  const merged = await PDFLib.PDFDocument.load(await (await run('merge', {}, [file, file])).arrayBuffer());
+  assert(merged.getPageCount() === 6 && merged.getPages()[3].getWidth() === 240, 'merge: wrong order or count');
+  await run('merge', {}, [file], true);
+  checks.push('merge and minimum file count');
+
+  const split = await JSZip.loadAsync(await run('split', { mode: 'ranges', ranges: '1-2,3' }));
+  const parts = Object.values(split.files);
+  assert(parts.length === 2, 'split: wrong archive count');
+  assert((await PDFLib.PDFDocument.load(await parts[0].async('uint8array'))).getPageCount() === 2, 'split: wrong range');
+  await run('split', { mode: 'ranges', ranges: '3-1' }, [file], true);
+  await run('split', { mode: 'ranges', ranges: '1,,3' }, [file], true);
+  checks.push('split and invalid ranges');
+
+  const removed = await PDFLib.PDFDocument.load(await (await run('remove-pages', { pages: '2' })).arrayBuffer());
+  assert(removed.getPageCount() === 2 && removed.getPages()[1].getWidth() === 280, 'remove: wrong remaining pages');
+  await run('remove-pages', { pages: 'all' }, [file], true);
+  await run('remove-pages', { pages: '9' }, [file], true);
+  checks.push('remove and page bounds');
+
+  const rotatedBlob = await run('rotate', { angle: '90', pages: '2-' });
+  const rotated = await PDFLib.PDFDocument.load(await rotatedBlob.arrayBuffer());
+  assert(rotated.getPages()[0].getRotation().angle === 0 && rotated.getPages()[2].getRotation().angle === 90, 'rotate: wrong selected pages');
+  checks.push('rotate and open-ended ranges');
+
+  const raster = await JSZip.loadAsync(await run('pdf-to-jpg', { dpi: '72', format: 'png' }));
+  const rasterImage = await createImageBitmap(await Object.values(raster.files)[0].async('blob'));
+  assert(rasterImage.width === 240 && rasterImage.height === 320, 'PDF to image: wrong dimensions');
+  rasterImage.close();
+  checks.push('PDF to image');
+
+  const compressed = await run('compress', { level: 'recommended' });
+  assert(compressed.size <= file.size && (await PDFLib.PDFDocument.load(await compressed.arrayBuffer())).getPageCount() === 3, 'compress: invalid output or increased size');
+  checks.push('PDF compression');
+
+  const imagesPdf = await PDFLib.PDFDocument.load(await (await run('jpg-to-pdf', { page_size: 'fit' }, [image, image])).arrayBuffer());
+  assert(imagesPdf.getPageCount() === 2 && imagesPdf.getPages()[0].getWidth() === 150, 'image to PDF: wrong dimensions or count');
+  checks.push('image to PDF');
+
+  const numbered = await PDFLib.PDFDocument.load(await (await run('page-numbers', { start: '3', font_size: '11' })).arrayBuffer());
+  assert(numbered.getPageCount() === 3, 'page numbering: invalid output');
+  const watermark = await run('watermark', { text: 'TEST', opacity: '100', font_size: '24', pages: '1', position: 'center' });
+  assert((await PDFLib.PDFDocument.load(await watermark.arrayBuffer())).getPageCount() === 3, 'watermark: invalid output');
+  await run('watermark', { watermark_image: image, opacity: '40' });
+  checks.push('page numbers, text and image watermarks');
+
+  const items = [{ type: 'rect', page: 1, x: 0.05, y: 0.05, w: 0.2, h: 0.1, color: '#ff0000', stroke: 4 }];
+  const edited = await run('edit', { items: JSON.stringify(items) }, [new File([rotatedBlob], 'rotated.pdf')]);
+  const form = new FormData();
+  form.append('files', edited, 'edited.pdf');
+  form.append('page', '1');
+  window.browserTestStep = 'annotation-preview';
+  const response = await BrowserTools.post('/api/preview', form);
+  assert(response.ok, 'edited rotated-page preview failed');
+  const preview = await response.json();
+  assert(preview.width === 320 && preview.height === 260, 'rotated preview dimensions');
+  window.browserTestStep = 'annotation-pixel-check';
+  const view = await createImageBitmap(await (await fetch(preview.image)).blob());
+  const pixels = document.createElement('canvas');
+  pixels.width = view.width;
+  pixels.height = view.height;
+  const pixelContext = pixels.getContext('2d');
+  pixelContext.drawImage(view, 0, 0);
+  view.close();
+  const pixel = pixelContext.getImageData(Math.round(pixels.width * 0.15), Math.round(pixels.height * 0.05), 1, 1).data;
+  assert(pixel[0] > 180 && pixel[1] < 100 && pixel[2] < 100, 'annotation misplaced on rotated page');
+  await run('sign', { items: JSON.stringify([{ type: 'image', page: 0, x: 0.1, y: 0.1, w: 0.3, h: 0.1, image: 'signature' }]), signature: image });
+  await run('edit', { items: JSON.stringify([{ type: 'text', page: 0, x: 0.1, y: 0.1, size: 16, text: 'Browser annotation' }]) });
+  checks.push('annotations, rotated placement and signature');
+
+  for (const [options, width, height] of [
+    [{ unit: 'px', width: '100', height: '100', fit: 'cover', format: 'png' }, 100, 100],
+    [{ unit: 'px', width: '100', height: '100', fit: 'contain', format: 'png' }, 100, 50],
+    [{ unit: 'px', width: '100', height: '100', fit: 'pad', format: 'png' }, 100, 100],
+    [{ unit: 'percent', percent: '50', format: 'png' }, 100, 50],
+    [{ unit: 'mm', width: '25.4', dpi: '100', format: 'png' }, 100, 50],
+  ]) {
+    const resized = await createImageBitmap(await run('resize-image', options, [image]));
+    assert(resized.width === width && resized.height === height, `resize dimensions: ${JSON.stringify(options)}`);
+    resized.close();
+  }
+  await run('resize-image', { unit: 'px', width: '-1' }, [image], true);
+  await run('resize-image', { unit: 'px', width: '16000', height: '16000', fit: 'stretch' }, [image], true);
+  checks.push('resize: cover, contain, pad, percent, physical units and limits');
+
+  for (const format of ['jpeg', 'png', 'webp']) {
+    const converted = await run('convert-image', { format }, [image]);
+    assert(converted.type === `image/${format}`, `convert: wrong MIME type for ${format}`);
+  }
+  const compressedImage = await run('compress-image', { format: 'jpeg', quality: '70', target_kb: '5' }, [image]);
+  assert(compressedImage.size <= 5 * 1024, 'image compression exceeded target');
+  await run('compress-image', { format: 'jpeg', target_kb: '0.01' }, [image], true);
+  await run('compress-image', { format: 'png', target_kb: '0.01' }, [image], true);
+  checks.push('image conversion, compression and impossible targets');
+
+  const duplicateNames = await JSZip.loadAsync(await run('convert-image', { format: 'png' }, [image, image]));
+  assert(Object.keys(duplicateNames.files).length === 2, 'duplicate filenames overwritten in ZIP');
+  const invalid = new File(['not a PDF'], 'invalid.pdf');
+  await run('rotate', {}, [invalid], true);
+  await run('protect', {}, [file], true);
+  checks.push('archive filename collisions, invalid input and desktop-only tools');
+  return { passed: true, checks, supportedTools: BrowserTools.supported.size };
+};

@@ -25,7 +25,7 @@ const pct = v => `${v * 100}%`;
 
 /* ------------------------------------------------------------------ tool catalogue */
 const PDF = '.pdf';
-const IMG = '.jpg,.jpeg,.png,.webp,.bmp,.gif,.tif,.tiff';
+const IMG = window.BrowserTools ? '.jpg,.jpeg,.png,.webp,.bmp,.gif' : '.jpg,.jpeg,.png,.webp,.bmp,.gif,.tif,.tiff';
 const PAGES_HELP = 'Type "all" or ranges like 1-3, 5, 8-';
 const FORMAT_CHOICES = [['same', 'Same as original'], ['jpeg', 'JPG'], ['png', 'PNG'], ['webp', 'WEBP']];
 
@@ -183,6 +183,24 @@ const TOOLS = [
 ];
 
 /* ------------------------------------------------------------------ routing */
+if (window.BrowserTools) {
+  for (let index = TOOLS.length - 1; index >= 0; index--) {
+    if (!BrowserTools.supported.has(TOOLS[index].id)) TOOLS.splice(index, 1);
+  }
+  for (const tool of TOOLS) {
+    if (tool.accept === IMG) tool.accept = '.jpg,.jpeg,.png,.webp,.bmp,.gif';
+    if (tool.id === 'pdf-to-jpg') {
+      tool.desc = 'Render PDF pages as JPG or PNG images.';
+      tool.options[0].choices = [['pages', 'Page to image']];
+    }
+    if (tool.id === 'compress') tool.desc = 'Create smaller, image-only PDFs. Searchable text, links, and forms are removed when compression is applied.';
+    if (tool.id === 'edit') tool.desc = 'Add text, images, shapes and freehand annotations. Whiteout only covers content; it is not secure redaction.';
+    if (tool.id === 'sign') tool.desc = 'Add a visual signature to a PDF. This is not a certificate-based digital signature.';
+    if (tool.id === 'convert-image') tool.desc = 'Convert JPG, PNG, WEBP, BMP or GIF to JPG, PNG or WEBP. Animated images become a single frame.';
+    if (tool.id === 'compress-image') tool.desc = 'Compress JPG and WEBP by quality or maximum KB. PNG output remains lossless.';
+  }
+}
+
 let homeQuery = '';
 
 function route() {
@@ -257,7 +275,7 @@ const toolIcon = (t, big) => el('span', { class: 'icon' + (big ? ' big' : ''), s
 
 function renderHome() {
   const app = $('#app');
-  const search = el('input', { type: 'search', class: 'search', placeholder: 'Search tools (e.g. compress, word, background)', 'aria-label': 'Search tools' });
+  const search = el('input', { type: 'search', class: 'search', placeholder: window.BrowserTools ? 'Search tools (e.g. merge, resize, watermark)' : 'Search tools (e.g. compress, word, background)', 'aria-label': 'Search tools' });
   search.value = homeQuery;
   const sections = el('div');
   const draw = () => {
@@ -279,8 +297,8 @@ function renderHome() {
   app.replaceChildren(
     el('section', { class: 'hero' },
       el('div', {},
-        el('h1', {}, 'Document & Image Toolkit'),
-        el('p', {}, 'Convert, edit, organize and secure PDF documents, and optimize images. Everything is processed privately on this computer.')),
+        el('h1', {}, window.BrowserTools ? 'Edit Doc Station' : 'Document & Image Toolkit'),
+        el('p', {}, window.BrowserTools ? 'Files stay in your browser.' : 'Convert, edit, organize and secure PDF documents, and optimize images. Everything is processed privately on this computer.')),
       search),
     sections);
   draw();
@@ -329,6 +347,7 @@ function download(blob, name) {
 const SERVER_DOWN = 'Cannot reach the Edit Doc Station server. Start it with run.bat and try again.';
 
 async function post(url, fd) {
+  if (window.BrowserTools) return BrowserTools.post(url, fd);
   try {
     return await fetch(url, { method: 'POST', body: fd });
   } catch {
@@ -635,7 +654,7 @@ function openEditor(t, file, body) {
   const isSign = t.editor === 'sign';
   const S = {
     page: 0, count: 1, pageW: 595, pageH: 842, cache: {}, items: [], sel: null,
-    mode: isSign ? 'signature' : 'edittext', images: {}, imgN: 0, pending: null, signature: null,
+    mode: isSign ? 'signature' : window.BrowserTools ? 'text' : 'edittext', images: {}, imgN: 0, pending: null, signature: null,
     props: { font: 'helvetica', size: 16, color: '#000000', stroke: 2 },
   };
 
@@ -659,9 +678,10 @@ function openEditor(t, file, body) {
       el('div', { class: 'ed-stage' }, el('div', { class: 'ed-page' }, img, overlay)))));
 
   /* ---- side panel ---- */
-  const MODES = isSign
+  const MODES = (isSign
     ? [['signature', 'Signature'], ['text', 'Text / Date']]
-    : [['edittext', 'Edit text'], ['text', 'Add text'], ['image', 'Image'], ['rect', 'Box'], ['whiteout', 'Whiteout'], ['draw', 'Draw']];
+    : [['edittext', 'Edit text'], ['text', 'Add text'], ['image', 'Image'], ['rect', 'Box'], ['whiteout', 'Whiteout'], ['draw', 'Draw']])
+    .filter(([mode]) => !window.BrowserTools || mode !== 'edittext');
   const HELP = {
     edittext: 'Existing text is highlighted in yellow. Click a line to change it. Clear it to delete the text; use \u00d7 to restore the original.',
     text: 'Click on the page to add text, then type. Drag the blue square to move it.',
