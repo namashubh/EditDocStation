@@ -194,7 +194,7 @@ if (window.BrowserTools) {
       tool.options[0].choices = [['pages', 'Page to image']];
     }
     if (tool.id === 'compress') tool.desc = 'Create smaller, image-only PDFs. Searchable text, links, and forms are removed when compression is applied.';
-    if (tool.id === 'edit') tool.desc = 'Add text, images, shapes and freehand annotations. Whiteout only covers content; it is not secure redaction.';
+    if (tool.id === 'edit') tool.desc = 'Change visible PDF text or add annotations. Pages with text replacements are flattened. Whiteout is not secure redaction.';
     if (tool.id === 'sign') tool.desc = 'Add a visual signature to a PDF. This is not a certificate-based digital signature.';
     if (tool.id === 'convert-image') tool.desc = 'Convert JPG, PNG, WEBP, BMP or GIF to JPG, PNG or WEBP. Animated images become a single frame.';
     if (tool.id === 'compress-image') tool.desc = 'Compress JPG and WEBP by quality or maximum KB. PNG output remains lossless.';
@@ -654,7 +654,7 @@ function openEditor(t, file, body) {
   const isSign = t.editor === 'sign';
   const S = {
     page: 0, count: 1, pageW: 595, pageH: 842, cache: {}, items: [], sel: null,
-    mode: isSign ? 'signature' : window.BrowserTools ? 'text' : 'edittext', images: {}, imgN: 0, pending: null, signature: null,
+    mode: isSign ? 'signature' : 'edittext', images: {}, imgN: 0, pending: null, signature: null,
     props: { font: 'helvetica', size: 16, color: '#000000', stroke: 2 },
   };
 
@@ -678,12 +678,13 @@ function openEditor(t, file, body) {
       el('div', { class: 'ed-stage' }, el('div', { class: 'ed-page' }, img, overlay)))));
 
   /* ---- side panel ---- */
-  const MODES = (isSign
+  const MODES = isSign
     ? [['signature', 'Signature'], ['text', 'Text / Date']]
-    : [['edittext', 'Edit text'], ['text', 'Add text'], ['image', 'Image'], ['rect', 'Box'], ['whiteout', 'Whiteout'], ['draw', 'Draw']])
-    .filter(([mode]) => !window.BrowserTools || mode !== 'edittext');
+    : [['edittext', 'Edit text'], ['text', 'Add text'], ['image', 'Image'], ['rect', 'Box'], ['whiteout', 'Whiteout'], ['draw', 'Draw']];
   const HELP = {
-    edittext: 'Existing text is highlighted in yellow. Click a line to change it. Clear it to delete the text; use \u00d7 to restore the original.',
+    edittext: window.BrowserTools
+      ? 'Click highlighted text to change it. Text replacements flatten the edited page and use a substitute font on a white background. Scanned text requires OCR.'
+      : 'Existing text is highlighted in yellow. Click a line to change it. Clear it to delete the text; use \u00d7 to restore the original.',
     text: 'Click on the page to add text, then type. Drag the blue square to move it.',
     image: 'Choose an image, then click on the page to place it. Drag to move, use the corner to resize.',
     rect: 'Drag on the page to draw a box.',
@@ -739,6 +740,10 @@ function openEditor(t, file, body) {
     strokeProp.hidden = !['rect', 'draw'].includes(m);
     styleHead.hidden = props.hidden = ['whiteout', 'image', 'signature'].includes(m);
     imageBox.hidden = m !== 'image';
+    if (window.BrowserTools) {
+      setStatus(status, m === 'edittext' && S.cache[S.page] && !S.cache[S.page].lines.length
+        ? 'No selectable text found on this page. Scanned pages require OCR.' : '');
+    }
     render();
   }
 
@@ -781,7 +786,8 @@ function openEditor(t, file, body) {
       pageLabel.textContent = `Page ${n + 1} / ${S.count}`;
       img.onload = () => render();
       img.src = data.image;
-      setStatus(status, '');
+      setStatus(status, window.BrowserTools && S.mode === 'edittext' && !data.lines.length
+        ? 'No selectable text found on this page. Scanned pages require OCR.' : '');
     } catch (err) {
       setStatus(status, err.message, 'error');
     }
@@ -867,7 +873,7 @@ function openEditor(t, file, body) {
       });
     };
     if (it.type === 'replace') {
-      Object.assign(e.style, { minWidth: pct(it.w), height: pct(it.h) });
+      Object.assign(e.style, { minWidth: pct(it.w), height: pct(it.h), transform: `rotate(${it.angle || 0}deg)`, transformOrigin: 'top left' });
       const txt = el('div', {
         class: 'ed-textbox', contenteditable: 'true', spellcheck: 'false',
         style: {
@@ -947,7 +953,7 @@ function openEditor(t, file, body) {
         if (taken.has(`${S.page}:${idx}`)) return;
         hotspots.push(el('div', {
           class: 'ed-line', title: ln.text, 'data-idx': idx,
-          style: { left: pct(ln.x), top: pct(ln.y), width: pct(ln.w), height: pct(ln.h) },
+          style: { left: pct(ln.x), top: pct(ln.y), width: pct(ln.w), height: pct(ln.h), transform: `rotate(${ln.angle || 0}deg)`, transformOrigin: 'top left' },
         }));
       });
     }

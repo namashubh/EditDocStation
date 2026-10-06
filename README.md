@@ -13,12 +13,13 @@ Available browser tools:
 - Merge, split, remove pages, and rotate PDFs.
 - PDF compression and PDF pages to JPG/PNG.
 - Images to PDF.
-- Visual PDF annotations, signatures, watermarks, and page numbers.
+- Visible PDF text replacement, annotations, signatures, watermarks, and page numbers.
 - Image compression, resizing, and JPG/PNG/WEBP conversion.
 
 Browser limitations:
 
-- Office/HTML conversions, PDF-to-Office conversions, AI background removal, password protection/unlocking, and original PDF text replacement remain desktop-only.
+- Office/HTML conversions, PDF-to-Office conversions, AI background removal, and password protection/unlocking remain desktop-only.
+- Edit PDF highlights selectable text. Clicking a text box allows its visible text to be changed or cleared. Text replacements use substitute fonts on a white background and flatten only the edited pages into images; searchable text, links, forms, and other interactive content on those pages are lost. Unedited pages remain PDFs with their original content. Replaced pages cannot be edited as text again without OCR; retain your original PDF for further edits. Scanned/image-only pages have no selectable text. This is not secure redaction and works best on plain white page backgrounds.
 - PDF compression rasterizes pages when it reduces file size. Searchable text, links, forms, and digital signatures are not preserved in the compressed copy. If the result would be larger, the original PDF is returned.
 - Whiteout is only a visual cover, not secure redaction. Added signatures are visual, not certificate-based digital signatures. Changing an already digitally signed PDF invalidates its existing signature.
 - Password-protected PDFs must be opened in the desktop version first.

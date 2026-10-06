@@ -122,9 +122,29 @@ window.BrowserTools = (() => {
         if (!Number.isInteger(index)) throw new Error('Page number must be an integer.');
         const page = await pdf.getPage(index + 1);
         const viewport = page.getViewport({ scale: 1 });
+        const library = await rendererModule;
+        const content = await page.getTextContent();
+        const lines = content.items.filter(item => item.str && item.str.trim()).map(item => {
+          const transform = library.Util.transform(viewport.transform, item.transform);
+          const size = Math.hypot(transform[2], transform[3]);
+          const angle = Math.atan2(transform[1], transform[0]);
+          const style = content.styles[item.fontName] || {};
+          const ascent = size * (style.ascent ?? 0.8);
+          const family = (style.fontFamily || '').toLowerCase();
+          return {
+            text: item.str,
+            x: (transform[4] + Math.sin(angle) * ascent) / viewport.width,
+            y: (transform[5] - Math.cos(angle) * ascent) / viewport.height,
+            w: Math.max(item.width * viewport.scale, 1) / viewport.width,
+            h: Math.max(size * ((style.ascent ?? 0.8) - (style.descent ?? -0.2)), size, 1) / viewport.height,
+            size, angle: angle * 180 / Math.PI,
+            font: family.includes('mono') ? 'courier' : family.includes('sans') ? 'helvetica' : 'times',
+            color: '#000000', bold: family.includes('bold'),
+          };
+        }).filter(line => line.size > 0 && Number.isFinite(line.x) && Number.isFinite(line.y));
         const surface = await renderPage(pdf, index, 1.5);
         return Response.json({ page_count: pdf.numPages, width: viewport.width, height: viewport.height,
-          image: surface.toDataURL('image/png'), lines: [] });
+          image: surface.toDataURL('image/png'), lines });
       }
       const pages = [];
       for (let index = 0; index < Math.min(pdf.numPages, 6); index++) {
@@ -218,19 +238,46 @@ window.BrowserTools = (() => {
   async function annotate(pdf, form) {
     const items = JSON.parse(form.get('items') || '[]');
     if (!Array.isArray(items) || !items.length) throw new Error('Add an annotation or signature first.');
+    const replacedPages = new Map();
     for (const index of new Set(items.map(item => item.page))) {
       if (!Number.isInteger(index) || index < 0 || index >= pdf.getPageCount()) throw new Error('Invalid annotation page.');
       const page = pdf.getPages()[index];
       const { width, height } = visibleSize(page);
       const surface = canvas(width * 2, height * 2);
       const context = surface.getContext('2d');
+      const replacements = items.filter(item => item.page === index && item.type === 'replace');
+      if (replacements.length) {
+        const rendered = await renderer(form.getAll('files')[0]);
+        try {
+          const original = await renderPage(rendered, index, 2);
+          context.drawImage(original, 0, 0, surface.width, surface.height);
+          original.width = original.height = 1;
+        } finally { await rendered.destroy(); }
+      }
       context.scale(2, 2);
+      for (const item of replacements) {
+        context.save();
+        context.translate(item.x * width, item.y * height);
+        context.rotate((item.angle || 0) * Math.PI / 180);
+        context.fillStyle = '#ffffff';
+        context.fillRect(-1, -1, item.w * width + 2, item.h * height + 2);
+        context.restore();
+      }
       for (const item of items.filter(entry => entry.page === index)) {
         context.fillStyle = context.strokeStyle = item.color || '#000000';
         context.lineWidth = item.stroke || 2;
         const x = item.x * width;
         const y = item.y * height;
-        if (item.type === 'text') {
+        if (item.type === 'replace') {
+          const family = { helvetica: 'sans-serif', times: 'serif', courier: 'monospace' }[item.font] || 'sans-serif';
+          context.save();
+          context.translate(x, y);
+          context.rotate((item.angle || 0) * Math.PI / 180);
+          context.font = `${item.bold ? 'bold ' : ''}${item.size || 16}px ${family}`;
+          context.textBaseline = 'top';
+          context.fillText(String(item.text || '').replace(/\n/g, ' '), 0, 0);
+          context.restore();
+        } else if (item.type === 'text') {
           const family = { helvetica: 'sans-serif', times: 'serif', courier: 'monospace' }[item.font] || 'sans-serif';
           context.font = `${item.size || 16}px ${family}`;
           context.textBaseline = 'top';
@@ -252,10 +299,26 @@ window.BrowserTools = (() => {
           try { context.drawImage(image, x, y, item.w * width, item.h * height); }
           finally { image.close(); }
         } else {
-          throw new Error('Existing text replacement requires the desktop app.');
+          throw new Error('Unsupported annotation type.');
         }
       }
-      await overlay(pdf, page, surface);
+      if (replacements.length) replacedPages.set(index, await encode(surface));
+      else await overlay(pdf, page, surface);
+    }
+    if (replacedPages.size) {
+      const output = await PDFLib.PDFDocument.create();
+      for (const index of pdf.getPageIndices()) {
+        if (replacedPages.has(index)) {
+          const { width, height } = visibleSize(pdf.getPages()[index]);
+          const page = output.addPage([width, height]);
+          const image = await output.embedPng(await replacedPages.get(index).arrayBuffer());
+          page.drawImage(image, { x: 0, y: 0, width, height });
+        } else {
+          const [page] = await output.copyPages(pdf, [index]);
+          output.addPage(page);
+        }
+      }
+      return pdfBlob(output);
     }
     return pdfBlob(pdf);
   }

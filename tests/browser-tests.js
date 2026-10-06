@@ -102,6 +102,51 @@ window.runBrowserTests = async function () {
   await run('edit', { items: JSON.stringify([{ type: 'text', page: 0, x: 0.1, y: 0.1, size: 16, text: 'Browser annotation' }]) });
   checks.push('annotations, rotated placement and signature');
 
+  const textPreview = async (blob, index) => {
+    const data = new FormData();
+    data.append('files', blob, 'text.pdf');
+    data.append('page', index);
+    const result = await BrowserTools.post('/api/preview', data);
+    assert(result.ok, 'text extraction preview failed');
+    return result.json();
+  };
+  for (const [source, pageIndex] of [[file, 0], [new File([rotatedBlob], 'rotated.pdf'), 1]]) {
+    const before = await textPreview(source, pageIndex);
+    const line = before.lines.find(entry => entry.text === `Page ${pageIndex + 1}`);
+    assert(line && line.w > 0 && line.h > 0, 'existing text box not extracted');
+    const changed = await run('edit', { items: JSON.stringify([{ ...line, type: 'replace', page: pageIndex, text: 'Changed', color: '#ff00ff' }]) }, [source]);
+    const after = await textPreview(changed, pageIndex);
+    assert(after.lines.length === 0, 'original text retained on flattened page');
+    const preserved = await textPreview(changed, 2);
+    assert(preserved.lines.some(entry => entry.text === 'Page 3'), 'unedited text was flattened or lost');
+    const replacementImage = await createImageBitmap(await (await fetch(after.image)).blob());
+    const raster = document.createElement('canvas');
+    raster.width = replacementImage.width;
+    raster.height = replacementImage.height;
+    const drawing = raster.getContext('2d');
+    drawing.drawImage(replacementImage, 0, 0);
+    replacementImage.close();
+    const values = drawing.getImageData(0, 0, raster.width, raster.height).data;
+    let replacementPixels = 0;
+    for (let offset = 0; offset < values.length; offset += 4) {
+      if (values[offset] > 180 && values[offset + 1] < 80 && values[offset + 2] > 180) replacementPixels++;
+    }
+    assert(replacementPixels > 20, 'replacement text missing from saved page');
+    const deleted = await run('edit', { items: JSON.stringify([{ ...line, type: 'replace', page: pageIndex, text: '' }]) }, [source]);
+    const cleared = await textPreview(deleted, pageIndex);
+    const clearImage = await createImageBitmap(await (await fetch(cleared.image)).blob());
+    drawing.clearRect(0, 0, raster.width, raster.height);
+    drawing.drawImage(clearImage, 0, 0);
+    clearImage.close();
+    const clearValues = drawing.getImageData(0, 0, raster.width, raster.height).data;
+    let darkPixels = 0;
+    for (let offset = 0; offset < clearValues.length; offset += 4) {
+      if (clearValues[offset] < 100 && clearValues[offset + 1] < 100 && clearValues[offset + 2] < 100) darkPixels++;
+    }
+    assert(darkPixels === 0, 'original text pixels remain after clearing text');
+  }
+  checks.push('existing text extraction, replacement, deletion, rotation and untouched page preservation');
+
   for (const [options, width, height] of [
     [{ unit: 'px', width: '100', height: '100', fit: 'cover', format: 'png' }, 100, 100],
     [{ unit: 'px', width: '100', height: '100', fit: 'contain', format: 'png' }, 100, 50],
