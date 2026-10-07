@@ -184,10 +184,8 @@ const TOOLS = [
 
 /* ------------------------------------------------------------------ routing */
 if (window.BrowserTools) {
-  for (let index = TOOLS.length - 1; index >= 0; index--) {
-    if (!BrowserTools.supported.has(TOOLS[index].id)) TOOLS.splice(index, 1);
-  }
   for (const tool of TOOLS) {
+    tool.desktopOnly = !BrowserTools.supported.has(tool.id);
     if (tool.accept === IMG) tool.accept = '.jpg,.jpeg,.png,.webp,.bmp,.gif';
     if (tool.id === 'pdf-to-jpg') {
       tool.desc = 'Render PDF pages as JPG or PNG images.';
@@ -203,11 +201,92 @@ if (window.BrowserTools) {
 }
 
 let homeQuery = '';
+const DESKTOP_ONLY_REASONS = {
+  'pdf-to-word': 'Needs the desktop document extraction and conversion engine.',
+  'pdf-to-powerpoint': 'Needs the desktop document extraction and conversion engine.',
+  'pdf-to-excel': 'Needs the desktop document extraction and conversion engine.',
+  'word-to-pdf': 'Needs the desktop conversion service and a compatible office suite.',
+  'powerpoint-to-pdf': 'Needs the desktop conversion service and a compatible office suite.',
+  'excel-to-pdf': 'Needs the desktop conversion service and a compatible office suite.',
+  'html-to-pdf': 'Needs a local browser-rendering service.',
+  unlock: 'PDF password operations are currently handled by the desktop processor.',
+  protect: 'PDF password operations are currently handled by the desktop processor.',
+};
+let installPromptEvent = null;
+let appInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+function updateInstallUI() {
+  document.querySelectorAll('[data-install-app]').forEach(button => {
+    button.disabled = appInstalled;
+    const label = button.querySelector('span');
+    if (label) label.textContent = appInstalled ? 'App installed' : 'Install app';
+  });
+}
+
+async function installApp() {
+  const status = $('[data-install-status]');
+  if (appInstalled) {
+    if (status) status.textContent = 'Edit Doc Station is installed on this device.';
+    return;
+  }
+  if (!installPromptEvent) {
+    if (status) status.textContent = 'To install, open your browser menu and choose "Install app" or "Add to Home Screen".';
+    return;
+  }
+  installPromptEvent.prompt();
+  const choice = await installPromptEvent.userChoice;
+  installPromptEvent = null;
+  if (status) status.textContent = choice.outcome === 'accepted' ? 'Edit Doc Station is being installed.' : 'Installation was dismissed.';
+}
+
+window.addEventListener('beforeinstallprompt', event => {
+  event.preventDefault();
+  installPromptEvent = event;
+  updateInstallUI();
+});
+window.addEventListener('appinstalled', () => {
+  appInstalled = true;
+  updateInstallUI();
+  const status = $('[data-install-status]');
+  if (status) status.textContent = 'Edit Doc Station is installed on this device.';
+});
+document.addEventListener('click', event => {
+  if (event.target.closest('[data-install-app]')) installApp();
+});
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./service-worker.js')
+    .then(registration => registration.update())
+    .catch(() => {});
+}
+
+function installPromo() {
+  return el('section', { class: 'install-promo', 'aria-labelledby': 'install-title' },
+    el('div', { class: 'install-mark', 'aria-hidden': 'true' }, svgIcon(['M12 3v12', 'M7 10l5 5 5-5', 'M5 20h14'])),
+    el('div', { class: 'install-copy' },
+      el('h2', { id: 'install-title' }, 'A workspace that goes where you go.'),
+      el('p', {}, 'Install the browser app for offline access to browser-ready tools. Desktop-only features still require the desktop version.')),
+    el('div', { class: 'install-action' },
+      el('button', { class: 'btn install-button', type: 'button', 'data-install-app': true },
+        el('span', {}, 'Install app'), svgIcon(['M5 12h14', 'M13 6l6 6-6 6'])),
+      el('p', { class: 'install-status', 'data-install-status': true, role: 'status', 'aria-live': 'polite' })));
+}
+
+function renderDesktopOnly(tool) {
+  $('#app').replaceChildren(
+    el('a', { class: 'back', href: '#' }, '\u2190 All tools'),
+    el('div', { class: 'tool-head' }, toolIcon(tool, true),
+      el('div', {}, el('h1', {}, tool.name), el('p', {}, tool.desc))),
+    el('section', { class: 'desktop-availability' },
+      el('span', { class: 'availability-badge' }, 'Desktop only'),
+      el('p', {}, DESKTOP_ONLY_REASONS[tool.id]),
+      el('p', {}, 'GitHub Pages serves static files and cannot run the local Python, Office, or browser-rendering services this tool needs.')));
+}
 
 function route() {
   if (window.disposeBackgroundEditor) disposeBackgroundEditor();
   const tool = TOOLS.find(t => t.id === location.hash.slice(1));
-  tool ? renderTool(tool) : renderHome();
+  if (tool?.desktopOnly) renderDesktopOnly(tool);
+  else tool ? renderTool(tool) : renderHome();
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);
@@ -275,6 +354,15 @@ const toolIcon = (t, big) => el('span', { class: 'icon' + (big ? ' big' : ''), s
   ICONS[t.id] ? svgIcon(ICONS[t.id]) : t.icon,
   ICON_BADGE[t.id] && el('span', { class: 'icon-badge', style: { background: t.color } }, ICON_BADGE[t.id]));
 
+function toolCard(tool) {
+  const body = el('div', {},
+    el('h3', {}, tool.name),
+    el('p', {}, tool.desc),
+    tool.desktopOnly && el('span', { class: 'availability-badge' }, 'Desktop only'));
+  return el('a', { class: 'card' + (tool.desktopOnly ? ' desktop-only' : ''), href: '#' + tool.id },
+    toolIcon(tool), body);
+}
+
 function renderHome() {
   const app = $('#app');
   const search = el('input', { type: 'search', class: 'search', placeholder: window.BrowserTools ? 'Search tools (e.g. merge, resize, watermark)' : 'Search tools (e.g. compress, word, background)', 'aria-label': 'Search tools' });
@@ -289,9 +377,7 @@ function renderHome() {
       if (!items.length) return null;
       return el('section', { class: 'cat-section' },
         el('div', { class: 'cat-head' }, el('h2', {}, label), el('span', { class: 'count' }, `${items.length} tool${items.length > 1 ? 's' : ''}`)),
-        el('div', { class: 'grid' }, items.map(t =>
-          el('a', { class: 'card', href: '#' + t.id }, toolIcon(t),
-            el('div', {}, el('h3', {}, t.name), el('p', {}, t.desc))))));
+        el('div', { class: 'grid' }, items.map(toolCard)));
     }).filter(Boolean));
     if (!list.length) sections.append(el('p', { class: 'empty' }, 'No tools match your search.'));
   };
@@ -302,8 +388,10 @@ function renderHome() {
         el('h1', {}, window.BrowserTools ? 'Edit Doc Station' : 'Document & Image Toolkit'),
         el('p', {}, window.BrowserTools ? 'Files stay in your browser.' : 'Convert, edit, organize and secure PDF documents, and optimize images. Everything is processed privately on this computer.')),
       search),
-    sections);
+    sections,
+    installPromo());
   draw();
+  updateInstallUI();
 }
 
 /* ------------------------------------------------------------------ shared UI */

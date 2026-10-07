@@ -19,6 +19,7 @@ Available browser tools:
 
 Browser limitations:
 
+- The catalog displays all 24 tools. Fifteen run entirely in the browser; nine are labeled **Desktop only** and open an explanation. GitHub Pages is a static host and cannot run the Python service, Office/LibreOffice, or local browser renderer required by those nine operations.
 - Office/HTML conversions, PDF-to-Office conversions, and password protection/unlocking remain desktop-only.
 - Edit PDF highlights selectable text. Clicking a text box allows its visible text to be changed or cleared. Text replacements use substitute fonts on a white background and flatten only the edited pages into images; searchable text, links, forms, and other interactive content on those pages are lost. Unedited pages remain PDFs with their original content. Replaced pages cannot be edited as text again without OCR; retain your original PDF for further edits. Scanned/image-only pages have no selectable text. This is not secure redaction and works best on plain white page backgrounds.
 - PDF compression rasterizes pages when it reduces file size. Searchable text, links, forms, and digital signatures are not preserved in the compressed copy. If the result would be larger, the original PDF is returned.
@@ -34,11 +35,11 @@ Use a current Chrome, Edge, Firefox, or Safari browser. Local processing does no
 
 In repository Settings > Pages, publish the `main` branch from `/ (root)`. The root `index.html` is the app entry point. `.nojekyll` keeps the bundled assets unchanged. No Python workflow or external hosting account is needed.
 
-To preview the web version locally, run `python -m http.server 5173` from this repository and open http://127.0.0.1:5173/. Opening the HTML directly as a file does not support the PDF worker modules.
+To preview the web version locally, run `python -m http.server 5173` from this repository and open http://127.0.0.1:5173/. Opening the HTML directly as a file does not support the PDF worker modules. Install as a PWA over HTTPS or localhost; its service worker caches the app shell and same-origin assets for offline use.
 
 ## Browser Tests
 
-Serve the repository over HTTP. Load `tests/browser-tests.js` on the app page with a script element, then call `await runBrowserTests()` in the browser console. It checks PDF/image processing, PDF structure, rotated annotation pixels, image dimensions, ZIP filename collisions, and invalid input. The catalog has 15 tools. Use `runEditorKeyboardTests()` for PDF editing keys and `runBackgroundEditorTests(blob)` for the background editor; these UI tests replace the current editor with synthetic or supplied test input, so run them in a separate test tab.
+Serve the repository over HTTP. Load `tests/browser-tests.js` on the app page with a script element, then call `await runBrowserTests()` in the browser console. It checks PDF/image processing, PDF structure, rotated annotation pixels, image dimensions, ZIP filename collisions, and invalid input. The catalog has 24 tools: 15 browser tools and nine clearly marked desktop-only tools. Use `runEditorKeyboardTests()` for PDF editing keys and `runBackgroundEditorTests(blob)` for the background editor; these UI tests replace the current editor with synthetic or supplied test input, so run them in a separate test tab.
 
 Dependency versions and licenses are listed in `THIRD_PARTY.md`.
 

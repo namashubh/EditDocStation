@@ -33,6 +33,10 @@ a { color: inherit; text-decoration: none; }
 .topnav { display: flex; gap: 4px; flex-wrap: wrap; }
 .topnav a { font-weight: 500; font-size: 14px; color: var(--muted); padding: 7px 12px; border-radius: 8px; }
 .topnav a:hover { color: var(--brand); background: var(--brand-soft); }
+.install-nav { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; color: var(--text); background: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.install-nav:hover { color: var(--brand); border-color: #93c5fd; background: var(--brand-soft); }
+.install-nav:disabled { color: var(--muted); cursor: default; }
+.install-nav svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .container { max-width: 1200px; margin: 0 auto; padding: 28px 24px 60px; }
 .footer { text-align: center; color: var(--muted); font-size: 13px; padding: 20px; border-top: 1px solid var(--border); background: #fff; }
 
@@ -63,6 +67,10 @@ a { color: inherit; text-decoration: none; }
 .card:hover h3 { color: var(--brand); }
 .card h3 { margin: 2px 0 4px; font-size: 15.5px; font-weight: 600; }
 .card p { color: var(--muted); margin: 0; font-size: 13px; line-height: 1.45; }
+.desktop-only .availability-badge { margin-top: 8px; }
+.availability-badge { display: inline-flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 999px; padding: 2px 8px; color: #475569; background: #f8fafc; font-size: 11px; font-weight: 600; line-height: 1.4; }
+.desktop-availability { max-width: 760px; padding: 20px; border: 1px solid var(--border); border-left: 3px solid #64748b; border-radius: 8px; background: #fff; line-height: 1.6; }
+.desktop-availability p { margin: 12px 0 0; color: var(--muted); }
 .icon {
   position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
   width: 48px; height: 48px; border-radius: 12px;
@@ -242,6 +250,21 @@ a { color: inherit; text-decoration: none; }
 .browser-app .tool-head > div { min-width: 0; }
 .browser-app .tool-head h1 { overflow-wrap: anywhere; }
 .browser-app .tool-head p { line-height: 1.5; }
+.download-section { max-width: 760px; padding-top: 18px; border-top: 1px solid var(--border); line-height: 1.6; }
+.download-section h2 { font-size: 22px; margin-top: 0; }
+.download-section h3 { font-size: 17px; margin-top: 28px; }
+.download-section .btn { margin: 8px 0; }
+.install-promo { display: flex; align-items: center; gap: 14px; margin: 28px 0; padding: 18px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.install-mark { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 44px; border: 1px solid var(--border); border-radius: 8px; color: #277a5b; }
+.install-mark svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.install-copy { flex: 1 1 320px; min-width: 0; }
+.install-copy h2 { margin: 0 0 3px; font-size: 15px; font-weight: 600; }
+.install-copy p, .install-status { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.install-action { flex: 0 0 auto; margin-left: auto; text-align: right; }
+.install-button { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.install-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.install-status:empty { display: none; }
+@media (max-width: 600px) { .install-action { flex: 1 1 calc(100% - 58px); min-width: 0; margin-left: 58px; text-align: left; } .install-status { max-width: 100%; overflow-wrap: anywhere; } }
 .bg-toolbar { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: 20px; }
 .bg-tabs, .bg-commands, .bg-modes { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .bg-action { display: inline-flex; gap: 6px; align-items: center; justify-content: center; min-height: 38px; }
