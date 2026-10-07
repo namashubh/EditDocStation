@@ -6,6 +6,7 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from flask import Flask, jsonify, render_template, request, send_file
 from werkzeug.utils import secure_filename
@@ -26,6 +27,28 @@ from converters import ToolError  # noqa: E402
 app = Flask(__name__, root_path=_HERE)
 app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024  # 300 MB per request
 log = logging.getLogger("docstation")
+PAGES_ORIGIN = "https://namashubh.github.io"
+
+
+def is_allowed_pwa_origin(origin):
+    parsed = urlsplit(origin or "")
+    return origin == PAGES_ORIGIN or (
+        parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+    )
+
+
+@app.after_request
+def allow_pwa_api(response):
+    origin = request.headers.get("Origin")
+    if origin and is_allowed_pwa_origin(origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Expose-Headers"] = "Content-Disposition, X-Original-Size, X-Result-Size"
+        response.headers.add("Vary", "Origin")
+        if request.headers.get("Access-Control-Request-Private-Network") == "true":
+            response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
 
 PDF = {".pdf"}
 IMAGES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
@@ -255,6 +278,11 @@ HANDLERS = {
 @app.get("/")
 def index():
     return render_template("index.html")
+
+
+@app.get("/api/health")
+def health():
+    return jsonify(status="ok", tools=sorted(HANDLERS))
 
 
 @app.post("/api/preview")

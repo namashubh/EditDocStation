@@ -214,6 +214,28 @@ const DESKTOP_ONLY_REASONS = {
 };
 let installPromptEvent = null;
 let appInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+const LOCAL_DESKTOP_API = 'http://127.0.0.1:5000';
+const localPage = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+const canCheckLocalDesktop = !!window.BrowserTools && (localPage || appInstalled);
+let localDesktopState = canCheckLocalDesktop ? 'checking' : 'unavailable';
+let localDesktopTools = new Set();
+
+async function checkLocalDesktop() {
+  try {
+    const response = await fetch(`${LOCAL_DESKTOP_API}/api/health`);
+    if (!response.ok) throw new Error('Local service is unavailable.');
+    const health = await response.json();
+    localDesktopTools = new Set(health.tools);
+    localDesktopState = 'available';
+  } catch {
+    localDesktopState = 'unavailable';
+  }
+  for (const tool of TOOLS) {
+    tool.desktopOnly = !BrowserTools.supported.has(tool.id) && !localDesktopTools.has(tool.id);
+  }
+  route();
+}
+if (canCheckLocalDesktop) checkLocalDesktop();
 
 function updateInstallUI() {
   document.querySelectorAll('[data-install-app]').forEach(button => {
@@ -260,11 +282,14 @@ if ('serviceWorker' in navigator) {
 }
 
 function installPromo() {
+  const description = localDesktopState === 'available'
+    ? 'Local desktop service connected. All tools are available on this PC.'
+    : 'Install the browser app for offline access to browser-ready tools. Desktop-only features require the local desktop service.';
   return el('section', { class: 'install-promo', 'aria-labelledby': 'install-title' },
     el('div', { class: 'install-mark', 'aria-hidden': 'true' }, svgIcon(['M12 3v12', 'M7 10l5 5 5-5', 'M5 20h14'])),
     el('div', { class: 'install-copy' },
       el('h2', { id: 'install-title' }, 'A workspace that goes where you go.'),
-      el('p', {}, 'Install the browser app for offline access to browser-ready tools. Desktop-only features still require the desktop version.')),
+      el('p', {}, description)),
     el('div', { class: 'install-action' },
       el('button', { class: 'btn install-button', type: 'button', 'data-install-app': true },
         el('span', {}, 'Install app'), svgIcon(['M5 12h14', 'M13 6l6 6-6 6'])),
@@ -272,6 +297,11 @@ function installPromo() {
 }
 
 function renderDesktopOnly(tool) {
+  const explanation = localDesktopState === 'checking'
+    ? 'Checking for the local desktop service...'
+    : localPage || appInstalled
+      ? 'Start the Edit Doc Station desktop service on this PC, then reload this app.'
+      : 'GitHub Pages serves static files and cannot run the local Python, Office, or browser-rendering services this tool needs.';
   $('#app').replaceChildren(
     el('a', { class: 'back', href: '#' }, '\u2190 All tools'),
     el('div', { class: 'tool-head' }, toolIcon(tool, true),
@@ -279,7 +309,7 @@ function renderDesktopOnly(tool) {
     el('section', { class: 'desktop-availability' },
       el('span', { class: 'availability-badge' }, 'Desktop only'),
       el('p', {}, DESKTOP_ONLY_REASONS[tool.id]),
-      el('p', {}, 'GitHub Pages serves static files and cannot run the local Python, Office, or browser-rendering services this tool needs.')));
+      el('p', {}, explanation)));
 }
 
 function route() {
@@ -437,11 +467,16 @@ function download(blob, name) {
 const SERVER_DOWN = 'Cannot reach the Edit Doc Station server. Start it with run.bat and try again.';
 
 async function post(url, fd) {
-  if (window.BrowserTools) return BrowserTools.post(url, fd);
+  const match = /^\/api\/tool\/(.+)$/.exec(url);
+  const desktopTool = window.BrowserTools && match && !BrowserTools.supported.has(match[1]);
+  if (window.BrowserTools && !(localDesktopState === 'available' && (desktopTool || url === '/api/render'))) {
+    return BrowserTools.post(url, fd);
+  }
+  const target = window.BrowserTools ? `${LOCAL_DESKTOP_API}${url}` : url;
   try {
-    return await fetch(url, { method: 'POST', body: fd });
+    return await fetch(target, { method: 'POST', body: fd });
   } catch {
-    throw new Error(SERVER_DOWN);
+    throw new Error(window.BrowserTools ? 'Could not reach the local desktop service on this PC.' : SERVER_DOWN);
   }
 }
 
