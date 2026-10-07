@@ -1,4 +1,4 @@
-const CACHE_NAME = 'edit-doc-station-v4';
+const CACHE_NAME = 'edit-doc-station-v5';
 const APP_SHELL = [
   './',
   './index.html',
@@ -13,7 +13,7 @@ const APP_SHELL = [
   './static/browser-tools.js?v=pages-4',
   './static/background-engine.js?v=background-1',
   './static/background-editor.js?v=background-1',
-  './static/app.js?v=pages-8'
+  './static/app.js?v=pages-9'
 ];
 
 self.addEventListener('install', event => {

@@ -219,6 +219,7 @@ const localPage = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname
 const canCheckLocalDesktop = !!window.BrowserTools && (localPage || appInstalled);
 let localDesktopState = canCheckLocalDesktop ? 'checking' : 'unavailable';
 let localDesktopTools = new Set();
+let localInstallerAvailable = false;
 
 async function checkLocalDesktop() {
   try {
@@ -226,6 +227,7 @@ async function checkLocalDesktop() {
     if (!response.ok) throw new Error('Local service is unavailable.');
     const health = await response.json();
     localDesktopTools = new Set(health.tools);
+    localInstallerAvailable = health.installer_available === true;
     localDesktopState = 'available';
   } catch {
     localDesktopState = 'unavailable';
@@ -293,6 +295,8 @@ function installPromo() {
     el('div', { class: 'install-action' },
       el('button', { class: 'btn install-button', type: 'button', 'data-install-app': true },
         el('span', {}, 'Install app'), svgIcon(['M5 12h14', 'M13 6l6 6-6 6'])),
+      localInstallerAvailable && el('a', { class: 'btn install-button', href: `${LOCAL_DESKTOP_API}/api/download/windows` },
+        el('span', {}, 'Download Windows setup'), svgIcon(['M12 3v12', 'M7 10l5 5 5-5', 'M5 20h14'])),
       el('p', { class: 'install-status', 'data-install-status': true, role: 'status', 'aria-live': 'polite' })));
 }
 

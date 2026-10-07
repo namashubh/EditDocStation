@@ -28,6 +28,8 @@ app = Flask(__name__, root_path=_HERE)
 app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024  # 300 MB per request
 log = logging.getLogger("docstation")
 PAGES_ORIGIN = "https://namashubh.github.io"
+WINDOWS_SETUP_NAME = "EditDocStation-1.0.2-Windows-x64-Offline.exe"
+WINDOWS_SETUP_FILE = Path(_HERE).parent / "EditDocStation" / "release" / WINDOWS_SETUP_NAME
 
 
 def is_allowed_pwa_origin(origin):
@@ -42,7 +44,7 @@ def allow_pwa_api(response):
     origin = request.headers.get("Origin")
     if origin and is_allowed_pwa_origin(origin):
         response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Methods"] = "GET, HEAD, POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
         response.headers["Access-Control-Expose-Headers"] = "Content-Disposition, X-Original-Size, X-Result-Size"
         response.headers.add("Vary", "Origin")
@@ -282,7 +284,14 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return jsonify(status="ok", tools=sorted(HANDLERS))
+    return jsonify(status="ok", tools=sorted(HANDLERS), installer_available=WINDOWS_SETUP_FILE.is_file())
+
+
+@app.route("/api/download/windows", methods=["GET", "HEAD"])
+def download_windows_setup():
+    if not WINDOWS_SETUP_FILE.is_file():
+        return jsonify(error="The Windows setup is not available on this PC."), 404
+    return send_file(WINDOWS_SETUP_FILE, as_attachment=True, download_name=WINDOWS_SETUP_NAME)
 
 
 @app.post("/api/preview")
