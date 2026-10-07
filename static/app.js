@@ -318,6 +318,11 @@ function renderDesktopOnly(tool) {
 
 function route() {
   if (window.disposeBackgroundEditor) disposeBackgroundEditor();
+  if (location.hash === '#downloads') {
+    renderDownloads();
+    window.scrollTo(0, 0);
+    return;
+  }
   const tool = TOOLS.find(t => t.id === location.hash.slice(1));
   if (tool?.desktopOnly) renderDesktopOnly(tool);
   else tool ? renderTool(tool) : renderHome();
@@ -325,6 +330,37 @@ function route() {
 }
 window.addEventListener('hashchange', route);
 document.addEventListener('DOMContentLoaded', route);
+
+function renderDownloads() {
+  const local = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
+  const status = el('div', { class: 'status', role: 'status' });
+  const size = el('p', {}, 'All three desktop AI models and the updated background editor are included.');
+  const button = local
+    ? localInstallerAvailable
+      ? el('a', { class: 'btn btn-primary btn-lg', href: `${LOCAL_DESKTOP_API}/api/download/windows` }, 'Download Windows setup')
+      : el('p', { class: 'muted' }, 'The Windows setup is not available from the local desktop service.')
+    : el('p', { class: 'muted' }, 'The personal-use Windows installer is not published for public download.');
+  $('#app').replaceChildren(
+    el('a', { class: 'back', href: '#' }, '\u2190 All tools'),
+    el('div', { class: 'tool-head' }, el('div', {}, el('h1', {}, 'Downloads'))),
+    installPromo(),
+    el('section', { class: 'download-section' },
+      el('h2', {}, 'Windows Offline Setup'),
+      el('p', {}, 'Version 1.0.2 - Windows 10/11, 64-bit'),
+      size,
+      button, status,
+      el('h3', {}, 'Requirements'),
+      el('ul', {},
+        el('li', {}, 'Microsoft Edge or Google Chrome.'),
+        el('li', {}, 'Microsoft Office or LibreOffice for Office-to-PDF conversions. These applications are not included.'),
+        el('li', {}, 'Enough free disk space for the app and offline AI models.'),
+        el('li', {}, 'Internet is still required for converting remote website URLs.')),
+      el('p', { class: 'muted' }, 'This installer is unsigned. Installation may be restricted by your organization\'s security policy.'),
+      el('h3', {}, 'Android and iPhone'),
+      el('p', {}, 'This Windows setup cannot be installed on phones. The browser version has fewer tools and is not a full desktop replacement.'),
+      el('a', { class: 'btn', href: '#' }, 'Open browser tools')));
+  updateInstallUI();
+}
 
 // Line icons on a 24x24 grid: strings are path data, {c:[cx,cy,r]} circles, {r:[x,y,w,h,rx]} rects.
 const DOC = ['M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z', 'M14 3v5h5'];
