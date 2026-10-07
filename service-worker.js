@@ -1,8 +1,10 @@
-const CACHE_NAME = 'edit-doc-station-v3';
+const CACHE_NAME = 'edit-doc-station-v4';
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './static/app-192.png',
+  './static/app-512.png',
   './static/logo.svg',
   './static/style.css?v=pages-5',
   './static/vendor/pdf-lib.min.js',
